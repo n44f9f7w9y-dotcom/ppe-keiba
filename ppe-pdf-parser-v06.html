@@ -1,0 +1,123 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PPE PDF構造化抽出 v0.6</title><style>body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#f5f7fb;color:#172033;margin:0}main{max-width:780px;margin:auto;padding:20px}header{background:#152b51;color:white;padding:20px;border-radius:16px}h1{font-size:23px;margin:0 0 5px}.sub{opacity:.8;font-size:13px}.panel{background:white;border-radius:14px;padding:17px;margin-top:15px;box-shadow:0 2px 10px #13223b12}label{display:block;font-size:13px;font-weight:600;margin:10px 0 5px}input,select,textarea{box-sizing:border-box;width:100%;border:1px solid #ccd3df;border-radius:8px;padding:11px;font-size:16px;background:white}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.scenario-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.six{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.six label{font-size:11px}.six input{padding:8px}button{border:0;border-radius:10px;padding:12px 16px;background:#245bc4;color:white;font-weight:700;font-size:15px;margin:8px 8px 0 0}.secondary{background:#e7ebf3;color:#243654}.danger{background:#a52c42}.horse{border-top:1px solid #e6e9f0;padding:12px 0}.small{font-size:12px;color:#657084}.rank{font-size:18px;font-weight:700}.bar{height:9px;background:#e8edf6;border-radius:9px;overflow:hidden}.bar>div{height:100%;background:#3168d5}#status{color:#8a3044;font-size:13px}.notice{font-size:12px;color:#59667b;line-height:1.7}footer{padding:18px 0;font-size:12px;color:#6b7280}</style></head><body><main><header><h1>🐎 PPE 競馬予想エンジン</h1><div class="sub">Pちゃん競馬塾 · PDF構造化抽出 Ver.0.6</div></header><section class="panel"><h2>レース設定</h2><div class="grid"><div><label for="race">レース名</label><input id="race" value="テストレース"></div><div><label for="mode">レース区分</label><select id="mode"><option value="lower">下級条件</option><option value="graded">重賞</option></select></div></div><div class="grid"><div><label for="temp">温度 T（未校正）</label><input id="temp" type="number" min="0.1" max="100" step="0.5" value="8"></div><div><label for="scenario">表示する展開</label><select id="scenario"><option value="all">3展開を統合</option><option value="S">スローのみ</option><option value="M">ミドルのみ</option><option value="H">ハイのみ</option></select></div></div><h3>展開の発生確率（合計100%）</h3><div class="scenario-grid"><div><label for="probS">スロー %</label><input id="probS" type="number" min="0" max="100" value="25"></div><div><label for="probM">ミドル %</label><input id="probM" type="number" min="0" max="100" value="50"></div><div><label for="probH">ハイ %</label><input id="probH" type="number" min="0" max="100" value="25"></div></div><p class="notice">各項目0〜5点。位置取りは展開に依存しない基準評価、展開適性はS/M/Hごとに別評価。展開確率と温度は仮置きで未校正。</p></section><section class="panel"><h2>出走馬を採点</h2><label for="bulk">馬名を一括登録（1行1頭）</label><textarea id="bulk" rows="4" placeholder="テイエムスティール&#10;パスコード&#10;タイムレスキス"></textarea><div class="tools"><button id="import">馬名を追加</button><button class="secondary" id="replace">馬名を全入替</button></div><p class="hint">同じ名前の馬は重複登録しません。追加した馬の初期点は3点です。</p><div id="horses"></div><div class="tools"><button id="add">＋ 馬を追加</button><button class="secondary" id="sample">サンプル</button><button class="secondary" id="save">今すぐ保存</button><button class="danger" id="clear">全消去</button></div><p id="saved" class="hint"></p></section><section class="panel"><h2>勝率計算</h2><button id="calc">計算する</button><p id="status"></p><div id="results"></div><p class="notice">表示する勝率は試作の数理モデルによる未校正値で、実際の勝率を保証しません。オッズや馬券購入判断にはそのまま使わないでください。</p></section><footer>入力データはこの端末のブラウザ内に自動保存します。端末変更・履歴削除・プライベートブラウズでは消える場合があります。外部送信や自動取得は行いません。</footer>
+<section class="panel" id="pdfPanel"><h2>📄 netkeiba競馬新聞 PDF 読込（試験版）</h2>
+<p class="notice">対応するnetkeiba紙面から馬名・性齢・オッズに加え、騎手・斤量・近4走の履歴を抽出します。項目ごとに不明を許容します。自動採点はまだ行いません。初期値3点で算出した勝率は正式な予想ではありません。読取後は必ず原紙と照合してください。画像PDFや別レイアウトでは失敗する場合があります。</p>
+<input id="pdfFile" type="file" accept="application/pdf,.pdf"><button id="pdfLoad">PDFを解析</button><p id="pdfStatus" class="notice"></p><div id="pdfPreview"></div>
+<p class="notice">今回の追加情報は推定座標からの機械抽出です。特に過去走の外国競馬・取消・特殊表記は原紙照合が必要です。未校正の採点値を正式予想に使用しないでください。</p><pre id="pdfDiagnostics" style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;background:#f2f5fb;border-radius:8px;padding:12px"></pre><button id="pdfDebugExport" class="secondary" style="display:none">診断JSONを保存（原因調査用）</button><br><button id="pdfImport" style="display:none">確認した馬名を出走馬欄に反映</button><button id="pdfExport" class="secondary" style="display:none">抽出JSONを保存</button>
+<p class="notice">診断JSONにはPDFに埋め込まれた文字列や紙面情報が含まれます。個人情報・非公開情報を含むPDFでは共有せず、まず中身を確認してください。</p><p class="notice">PDF.jsをCDNから読み込むため、初回はインターネット接続が必要です。PDF本体はこの機能では外部送信しません。</p></section>
+<style>.pdf-row{padding:12px 0;border-bottom:1px solid #ddd}.pdf-row details{margin-top:7px}.pdf-run{margin:5px 0;padding:8px;background:#f4f7fd;border-radius:7px;font-size:12px}.pdf-mini{font-size:12px;color:#455873}.pdf-meta{font-size:12px;color:#46566e}</style><script type="module">
+const $=id=>document.getElementById(id);
+const status=$('pdfStatus'),preview=$('pdfPreview');
+let extracted=null,diagnostic=null;
+const escapeHtml=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function saveJSON(data,filename){const u=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json;charset=utf-8'}));const a=document.createElement('a');a.href=u;a.download=filename;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),15000)}
+function nearby(items,y,tol=.8){return items.filter(t=>Math.abs(t.y-y)<=tol).sort((a,b)=>a.x-b.x)}
+function join(items){return items.sort((a,b)=>a.x-b.x).map(t=>t.s).join('')}
+function byX(arr,x1,x2){return arr.filter(t=>t.x>=x1&&t.x<x2)}
+function parseRun(items,anchor,column){
+ const left=[175.0,276.4,377.8,479.1][column];
+ const right=[276.3,377.7,479.0,580.0][column];
+ const part=byX(items,left,right).filter(t=>t.y>=anchor-17&&t.y<=anchor+18);
+ const at=(dy,tol=.65)=>nearby(part,anchor+dy,tol);
+ const dateLine=at(-14,1.0), gradeLine=at(-15.1,1.1), placeLine=at(-6.7,1.2), detailLine=at(-.2,1.3),surfaceLine=at(7.5,1), finishLine=at(15.7,1.3);
+ const dateText=join(dateLine.filter(t=>t.x<left+45)), date=(dateText.match(/\d{2}\/\d{2}/)||[])[0]||null;
+ // 日付+場所+レース番号 (休養表示時は日付なし)
+ if(!date)return null;
+ const track=(dateText.match(/\d{2}\/\d{2}(.+?)(\d{1,2})R/)||[])[1]||null;
+ const raceNum=(dateText.match(/(\d{1,2})R/)||[])[1]||null;
+ const grade=join(gradeLine.filter(t=>t.x>=left+31&&t.x<=left+48)).match(/G[123]|OP|L/)?.[0]||null;
+ const placeFinish=join(byX(at(-11.5,1.3),right-17,right));
+ const placing=placeFinish.match(/^(\d{1,2})$/)?.[1]||null;
+ const raceName=join(placeLine.filter(t=>t.x<left+38)).replace(/国際.*$/,'')||null;
+ const detail=join(detailLine), surface=join(surfaceLine);
+ const num=detail.match(/(\d{1,2}|--)頭/), gate=detail.match(/(\d{1,2})番/), popularity=detail.match(/(\d{1,2})人気/);
+ const weightMatch=detail.match(/(\d{2}\.\d)(?=\d{3}kg|$)/);
+ const kg=detail.match(/(\d{3})kg/);
+ const distanceText=surface.match(/(芝|ダ|障)(\d{3,4})/);
+ const timeText=surface.match(/[0-9-]:[0-9-]{2}\.[0-9-]{1,2}/);
+ const condition=(surface.match(/[良稍重不](?=\d+:|[-0-9]:)/)||[])[0]||null;
+ // 上がり3Fは末行の末尾数値。外国競馬の空欄は null。
+ const endText=join(finishLine);
+ const last3f=(endText.match(/(\d{2}\.\d)\s*$/)||[])[1]||null;
+ const nearPos=join(surfaceLine.filter(t=>t.x>=right-47&&t.x<right-9));
+ // 位置取りは数字や '-' 以外が混在しやすいため原文保持を優先。
+ const positionsRaw=nearPos.match(/[\d-]{2,12}$/)?.[0]||null;
+ return {run:column+1,date,track,race_number:raceNum?Number(raceNum):null,race_name:raceName,grade,finish:placing?Number(placing):null,field_size:num&&num[1]!=='--'?Number(num[1]):null,draw:gate?Number(gate[1]):null,popularity:popularity?Number(popularity[1]):null,distance:distanceText?Number(distanceText[2]):null,surface:distanceText?distanceText[1]:null,track_condition:condition,finish_time:timeText?timeText[0]:null,positions_raw:positionsRaw,last3f:last3f?Number(last3f):null,raw:{date:dateText,detail,surface,end:endText},verification:'未照合'};
+}
+function printDiag(){if(!diagnostic)return;const d=diagnostic;const lines=[`ファイル: ${d.file_name}`,`ページ数: ${d.pages??'不明'}`,`1ページ目: ${d.page1?.width??'?'}×${d.page1?.height??'?'} pt`,`文字要素: ${d.page1?.item_count??0}`,`馬番候補: ${d.page1?.number_candidates?.length||0}個`,`解析結果: ${d.outcome}`];$('pdfDiagnostics').textContent=lines.join('\n');$('pdfDebugExport').style.display='inline-block'}
+async function parsePDF(){
+ const f=$('pdfFile').files[0];if(!f){status.textContent='PDFを選択してな。';return}
+ extracted=null;diagnostic={version:'PPE PDF構造化抽出 v0.6',file_name:f.name,file_size:f.size,created_at:new Date().toISOString(),outcome:'解析中'};
+ status.textContent='解析中…';preview.innerHTML='';$('pdfDiagnostics').textContent='';
+ ['pdfImport','pdfExport','pdfDebugExport'].forEach(id=>$(id).style.display='none');
+ try{
+  const pdfjs=await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs');
+  pdfjs.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs';
+  const doc=await pdfjs.getDocument({data:new Uint8Array(await f.arrayBuffer())}).promise;
+  diagnostic.pages=doc.numPages;
+  const page=await doc.getPage(1),content=await page.getTextContent();
+  const width=page.view[2]-page.view[0],height=page.view[3]-page.view[1];
+  const items=content.items.filter(t=>typeof t.str==='string'&&t.str.trim()).map(t=>({s:t.str.trim(),x:Math.round((t.transform[4]-page.view[0])*10)/10,y:Math.round((page.view[3]-t.transform[5])*10)/10}));
+  const nums=items.filter(t=>t.x>20&&t.x<38&&/^([1-9]|1[0-9]|2[0-9])$/.test(t.s)&&t.y>100).sort((a,b)=>a.y-b.y);
+  const unique=[];for(const n of nums){if(!unique.some(u=>Math.abs(u.y-n.y)<8))unique.push(n)}
+  diagnostic.page1={width,height,item_count:items.length,number_candidates:nums,items};
+  const out=[],rows=[];
+  for(const n of unique){
+   const number=Number(n.s),row=byX(items,48,150).filter(t=>t.y>=n.y-19&&t.y<=n.y+17);
+   const nameRaw=join(byX(nearby(row,n.y-9.5,.8),48,116));
+   const blinkers=/[ＢB]$/.test(nameRaw),name=nameRaw.replace(/[ＢB]$/,'').trim();
+   const sexText=join(byX(nearby(row,n.y-16.2,.8),129,149));
+   const sm=sexText.match(/(牡|牝|セ|騙)([0-9]+)(.*)/);
+   const oddsText=join(byX(nearby(row,n.y+14.3,.8),110,148));
+   const om=oddsText.match(/([0-9]+(?:\.[0-9]+)?)\(([0-9]+)人気\)/);
+   const riderRaw=join(byX(nearby(items,n.y-2,1.0),152,175)).replace(/^[替初]/,'');
+   const weightText=join(byX(nearby(items,n.y+10.9,1.5),152,175));
+   const weight=weightText.match(/\d{2}\.\d/);
+   const history=[0,1,2,3].map(j=>parseRun(items,n.y,j)).filter(Boolean);
+   const parsed={number,name,sex_age:sm?sm[1]+sm[2]+(sm[3]?' '+sm[3]:''):null,sex:sm?sm[1]:null,age:sm?Number(sm[2]):null,odds:om?Number(om[1]):null,odds_rank:om?Number(om[2]):null,blinkers,jockey_raw:riderRaw||null,weight_kg:weight?Number(weight[0]):null,previous_runs:history,verification:'未照合'};
+   rows.push({number,parsed,sex_text:sexText,odds_text:oddsText});
+   if(name&&sm&&om)out.push(parsed);
+  }
+  diagnostic.rows=rows;
+  const good=width>=550&&width<=650&&unique.length>=2&&out.length===unique.length&&new Set(out.map(h=>h.number)).size===out.length;
+  if(!good){diagnostic.outcome=`抽出不足 ${out.length}/${unique.length}頭`;status.textContent=`${out.length}/${unique.length}頭。原紙との照合が必要。診断JSONを保存してな。`}
+  else{
+   diagnostic.outcome=`${out.length}頭の基本情報と近走を仮抽出`;
+   extracted={version:'PPE PDF構造化抽出 v0.6',source_file:f.name,status:'研究用・原紙未照合',horses:out};
+   status.textContent=`${out.length}頭の基本情報を仮抽出。近走履歴は${out.reduce((s,h)=>s+h.previous_runs.length,0)}件。必ず原紙と照合してな。`;
+   preview.innerHTML=out.map(h=>`<div class="pdf-row"><strong>${h.number}番 ${escapeHtml(h.name)}${h.blinkers?'（B）':''}</strong>　${h.odds}倍（${h.odds_rank}人気）<div class="pdf-meta">${escapeHtml(h.sex_age||'性齢不明')} ／ 騎手欄: ${escapeHtml(h.jockey_raw||'未取得')} ／ 斤量: ${h.weight_kg??'未取得'}kg</div><details><summary>近走 ${h.previous_runs.length}件を表示（未照合）</summary>${h.previous_runs.map(r=>`<div class="pdf-run">${r.run}走前：${escapeHtml(r.date||'?')} ${escapeHtml(r.track||'?')} ${escapeHtml(r.race_name||'')} ${escapeHtml(r.grade||'')}　${r.finish??'?'}着<br>${escapeHtml(r.surface||'?')}${r.distance??'?'}m / ${escapeHtml(r.track_condition||'?')} / ${escapeHtml(r.finish_time||'?')}　上がり ${r.last3f??'?'}　通過 ${escapeHtml(r.positions_raw||'?')}</div>`).join('')}</details></div>`).join('');
+   $('pdfImport').style.display='inline-block';$('pdfExport').style.display='inline-block';
+  }
+ }catch(e){diagnostic.outcome='例外: '+String(e?.message||e);status.textContent='読込エラー: '+String(e?.message||e)}
+ printDiag();
+}
+$('pdfLoad').onclick=parsePDF;
+$('pdfDebugExport').onclick=()=>{if(diagnostic)saveJSON(diagnostic,'ppe-pdf-diagnostic-v06.json')};
+$('pdfImport').onclick=()=>{if(!extracted)return;if(!confirm('馬名だけを既存の採点欄に反映します。初期3点は正式予想に使用しないでな。既存採点は置き換わります。'))return;$('bulk').value=extracted.horses.map(h=>h.name).join('\n');$('replace').click();if(!$('bulk').value)status.textContent='馬名を採点画面に反映したで（採点は未実施）。'};
+$('pdfExport').onclick=()=>{if(extracted)saveJSON(extracted,'ppe_pdf_structured_v06.json')};
+</script>
+</main><script>
+const keys=['ability','change','position','condition','course'];
+const labels=['基礎能力','前走からの変化','位置取り','状態・ローテ','コース・馬場'];
+const weights={lower:[25,15,10,15,15,20],graded:[30,10,15,15,15,15]};
+const el=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid=()=>typeof crypto!=='undefined'&&crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random();
+let horses=[];
+const fields=['race','mode','temp','scenario','probS','probM','probH'];
+function save(){try{localStorage.setItem('ppe-v02',JSON.stringify({horses,settings:Object.fromEntries(fields.map(k=>[k,el(k).value]))}));el('saved').textContent='このiPhoneのブラウザに保存しました';el('saved').className='hint ok'}catch(e){el('saved').textContent='保存できませんでした。ブラウザの設定を確認してな。'}}
+function addHorse(name='',scores=[3,3,3,3,3],pace=[3,3,3],skip=false){horses.push({id:uid(),name,scores:[...scores],pace:[...pace]});if(!skip){render();save()}}
+function render(){el('horses').innerHTML=horses.map((h,i)=>`<div class="horse" data-id="${h.id}"><label>馬 ${i+1} の名前</label><input class="name" value="${esc(h.name)}" placeholder="馬名"><div class="six">${labels.map((l,j)=>`<div><label>${l}</label><input class="score" data-j="${j}" type="number" min="0" max="5" step="0.5" value="${h.scores[j]}"></div>`).join('')}</div><label>展開適性（0〜5点）</label><div class="scenario-grid">${['S','M','H'].map((x,j)=>`<div><label>${{S:'スロー',M:'ミドル',H:'ハイ'}[x]}</label><input class="pace" data-j="${j}" type="number" min="0" max="5" step="0.5" value="${h.pace[j]}"></div>`).join('')}</div><button class="secondary remove">この馬を削除</button></div>`).join('');document.querySelectorAll('#horses .horse').forEach(node=>{const h=horses.find(x=>x.id===node.dataset.id);node.querySelector('.name').oninput=e=>{h.name=e.target.value;save()};node.querySelectorAll('.score').forEach(inp=>inp.oninput=e=>{h.scores[+inp.dataset.j]=e.target.value===''?null:Number(e.target.value);save()});node.querySelectorAll('.pace').forEach(inp=>inp.oninput=e=>{h.pace[+inp.dataset.j]=e.target.value===''?null:Number(e.target.value);save()});node.querySelector('.remove').onclick=()=>{horses=horses.filter(x=>x.id!==h.id);render();save()}})}
+function importNames(replace){let names=el('bulk').value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);if(!names.length){alert('馬名を1行1頭で入力してな');return}if(replace&&!confirm('今の全頭データを消して入れ替えるで。よろしい？'))return;if(replace)horses=[];const seen=new Set(horses.map(h=>h.name));for(const name of names){if(!seen.has(name)){addHorse(name,undefined,undefined,true);seen.add(name)}}el('bulk').value='';el('results').innerHTML='';render();save()}
+el('import').onclick=()=>importNames(false);el('replace').onclick=()=>importNames(true);
+el('add').onclick=()=>addHorse();el('save').onclick=save;
+el('sample').onclick=()=>{if(horses.length&&!confirm('現在の採点をサンプルに置き換えるで。よろしい？'))return;horses=[];[['A馬',[4.5,4,3.5,4,4.5],[3.5,4,4.5]],['B馬',[4,3,4.5,4,4],[4,3.5,2.5]],['C馬',[3.5,4.5,3,4,3.5],[3.5,4.5,4]],['D馬',[3,3.5,4,3,4],[4,3,2]],['E馬',[3,3,3,3.5,3],[2.5,3.5,4]]].forEach(([n,s,p])=>addHorse(n,s,p,true));render();save();el('results').innerHTML=''};
+el('clear').onclick=()=>{if(!confirm('全頭のデータを消去するで。よろしい？'))return;horses=[];render();save();el('results').innerHTML=''};
+fields.forEach(k=>el(k).addEventListener('change',save));
+function calc(){el('status').textContent='';el('results').innerHTML='';const T=Number(el('temp').value);if(!horses.length||!Number.isFinite(T)||T<=0){el('status').textContent='馬を追加し、Tを0より大きくしてな。';return}const valid=x=>typeof x==='number'&&Number.isFinite(x)&&x>=0&&x<=5;if(horses.some(h=>!h.name.trim()||h.scores.some(x=>!valid(x))||h.pace.some(x=>!valid(x)))){el('status').textContent='全頭の馬名と0〜5点の採点を確認してな。';return}const ps=['probS','probM','probH'].map(k=>Number(el(k).value));if(ps.some(x=>!Number.isFinite(x)||x<0||x>100)||Math.abs(ps.reduce((a,b)=>a+b,0)-100)>0.0001){el('status').textContent='展開の発生確率を合計100%にしてな。';return}const w=weights[el('mode').value];const indexes=horses.map(h=>h.pace.map(p=>(h.scores.reduce((sum,s,j)=>sum+s*w[j]/5,0)+p*w[5]/5)));
+const scenarios=[0,1,2].map(j=>{const vals=indexes.map(x=>x[j]);const max=Math.max(...vals);const ex=vals.map(v=>Math.exp((v-max)/T));const sum=ex.reduce((a,b)=>a+b,0);return ex.map(x=>x/sum)});
+const mode=el('scenario').value;const probs=mode==='all'?ps.map(x=>x/100):['S','M','H'].map(x=>x===mode?1:0);
+const rows=horses.map((h,i)=>({name:h.name,p:100*scenarios.reduce((sum,s,j)=>sum+probs[j]*s[i],0),index:indexes[i].reduce((sum,v,j)=>sum+probs[j]*v,0),each:scenarios.map(s=>100*s[i])})).sort((a,b)=>b.p-a.p);
+el('results').innerHTML=`<h3>${esc(el('race').value)}：${rows.length}頭</h3><p class="notice">${mode==='all'?'3展開統合':'単一展開'}・温度T=${T}／未校正の試算</p>`+rows.map((r,i)=>`<div class="horse"><div class="rank">${['◎','○','▲'][i]||i+1+'位'} ${esc(r.name)} <span style="float:right">${r.p.toFixed(1)}%</span></div><div class="small">平均指数 ${r.index.toFixed(1)}/100｜S ${r.each[0].toFixed(1)}%・M ${r.each[1].toFixed(1)}%・H ${r.each[2].toFixed(1)}%</div><div class="bar"><div style="width:${r.p}%"></div></div></div>`).join('');save()}
+el('calc').onclick=calc;
+try{const raw=localStorage.getItem('ppe-v02');if(raw){const obj=JSON.parse(raw);fields.forEach(k=>{if(obj.settings&&obj.settings[k]!=null)el(k).value=obj.settings[k]});horses=(obj.horses||[]).filter(h=>Array.isArray(h.scores)&&h.scores.length===5&&Array.isArray(h.pace)&&h.pace.length===3).map(h=>({...h,id:uid()}));render();el('saved').textContent='保存済みデータを復元しました'}else{el('sample').click()}}catch(e){el('sample').click()}
+</script></body></html>
