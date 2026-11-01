@@ -1,0 +1,72 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PPE 競馬予想エンジン v0.2</title><style>body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#f5f7fb;color:#172033;margin:0}main{max-width:780px;margin:auto;padding:20px}header{background:#152b51;color:white;padding:20px;border-radius:16px}h1{font-size:23px;margin:0 0 5px}.sub{opacity:.8;font-size:13px}.panel{background:white;border-radius:14px;padding:17px;margin-top:15px;box-shadow:0 2px 10px #13223b12}label{display:block;font-size:13px;font-weight:600;margin:10px 0 5px}input,select,textarea{box-sizing:border-box;width:100%;border:1px solid #ccd3df;border-radius:8px;padding:11px;font-size:16px;background:white}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.six{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.six label{font-size:11px}.six input{padding:8px}button{border:0;border-radius:10px;padding:12px 16px;background:#245bc4;color:white;font-weight:700;font-size:15px;margin:8px 8px 0 0}.secondary{background:#e7ebf3;color:#243654}.danger{background:#a52c42}.horse{border-top:1px solid #e6e9f0;padding:12px 0}.small{font-size:12px;color:#657084}.rank{font-size:18px;font-weight:700}.bar{height:9px;background:#e8edf6;border-radius:9px;overflow:hidden}.bar>div{height:100%;background:#3168d5}#status{color:#8a3044;font-size:13px}.notice{font-size:12px;color:#59667b;line-height:1.7}footer{padding:18px 0;font-size:12px;color:#6b7280}</style></head><body><main><header><h1>🐎 PPE 競馬予想エンジン</h1><div class="sub">Pちゃん競馬塾 · 試作 Ver.0.2</div></header><section class="panel"><h2>レース設定</h2><div class="grid"><div><label for="race">レース名</label><input id="race" value="テストレース"></div><div><label for="mode">レース区分</label><select id="mode"><option value="lower">下級条件</option><option value="graded">重賞</option></select></div></div><div class="grid"><div><label for="temp">温度 T（未校正）</label><input id="temp" type="number" min="0.1" max="100" step="0.5" value="8"></div><div><label for="scenario">表示する展開</label><select id="scenario"><option value="all">3展開を統合</option><option value="S">スローのみ</option><option value="M">ミドルのみ</option><option value="H">ハイのみ</option></select></div></div><h3>展開の発生確率（合計100%）</h3><div class="scenario-grid"><div><label for="probS">スロー %</label><input id="probS" type="number" min="0" max="100" value="25"></div><div><label for="probM">ミドル %</label><input id="probM" type="number" min="0" max="100" value="50"></div><div><label for="probH">ハイ %</label><input id="probH" type="number" min="0" max="100" value="25"></div></div><p class="notice">各項目0〜5点。位置取りは展開に依存しない基準評価、展開適性はS/M/Hごとに別評価。展開確率と温度は仮置きで未校正。</p></section><section class="panel"><h2>出走馬を採点</h2><label for="bulk">馬名を一括登録（1行1頭）</label><textarea id="bulk" rows="4" placeholder="テイエムスティール&#10;パスコード&#10;タイムレスキス"></textarea><div class="tools"><button id="import">馬名を追加</button><button class="secondary" id="replace">馬名を全入替</button></div><p class="hint">同じ名前の馬は重複登録しません。追加した馬の初期点は3点です。</p><div id="horses"></div><div class="tools"><button id="add">＋ 馬を追加</button><button class="secondary" id="sample">サンプル</button><button class="secondary" id="save">今すぐ保存</button><button class="danger" id="clear">全消去</button></div><p id="saved" class="hint"></p></section><section class="panel"><h2>勝率計算</h2><button id="calc">計算する</button><p id="status"></p><div id="results"></div><p class="notice">表示する勝率は試作の数理モデルによる未校正値で、実際の勝率を保証しません。オッズや馬券購入判断にはそのまま使わないでください。</p></section><footer>入力データはこの端末のブラウザ内に自動保存します。端末変更・履歴削除・プライベートブラウズでは消える場合があります。外部送信や自動取得は行いません。</footer>
+<section class="panel" id="pdfPanel"><h2>📄 netkeiba競馬新聞 PDF 読込（試験版）</h2>
+<p class="notice">横型の文字埋め込みPDF向け。馬番・馬名・性齢・掲載オッズを抽出します。自動採点はまだ行いません。読取後は必ず原紙と照合してください。画像PDFや別レイアウトでは失敗する場合があります。</p>
+<input id="pdfFile" type="file" accept="application/pdf,.pdf"><button id="pdfLoad">PDFを解析</button><p id="pdfStatus" class="notice"></p><div id="pdfPreview"></div>
+<button id="pdfImport" style="display:none">確認した馬名を出走馬欄に反映</button><button id="pdfExport" class="secondary" style="display:none">抽出JSONを保存</button>
+<p class="notice">PDF.jsをCDNから読み込むため、初回はインターネット接続が必要です。PDF本体はこの機能では外部送信しません。</p></section>
+<script type="module">
+const status=document.getElementById('pdfStatus'),preview=document.getElementById('pdfPreview');
+let extracted=null;
+const escapeHtml=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function parsePDF(){
+ const f=document.getElementById('pdfFile').files[0];if(!f){status.textContent='PDFを選択してな。';return}
+ status.textContent='解析中…';preview.innerHTML='';document.getElementById('pdfImport').style.display='none';document.getElementById('pdfExport').style.display='none';
+ try{
+  const pdfjs=await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs');
+  pdfjs.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs';
+  const doc=await pdfjs.getDocument({data:new Uint8Array(await f.arrayBuffer())}).promise;
+  const page=await doc.getPage(1);const content=await page.getTextContent();
+  const items=content.items.filter(x=>x.str?.trim()).map(x=>({s:x.str.trim(),x:x.transform[4],y:page.view[3]-x.transform[5]}));
+  // netkeiba横型: 左端の馬番と馬名欄を用いる。ページ寸法が異なる場合は拒否。
+  const width=page.view[2]-page.view[0];if(width<550||width>650)throw Error('この試験版はA4横型紙面の指定レイアウトのみ対応です。');
+  const numItems=items.filter(t=>t.x>20&&t.x<38&&/^([1-9]|1[0-9]|2[0-9])$/.test(t.s)&&t.y>100).sort((a,b)=>a.y-b.y);
+  const unique=[];for(const n of numItems){if(!unique.some(u=>Math.abs(u.y-n.y)<8))unique.push(n)}
+  const out=[];
+  for(let i=0;i<unique.length;i++){
+   const n=unique[i],start=n.y-20,end=i+1<unique.length?unique[i+1].y-20:page.view[3]-10;
+   const left=items.filter(t=>t.x>48&&t.x<152&&t.y>=start&&t.y<end).sort((a,b)=>a.y-b.y||a.x-b.x);
+   const sex=left.findIndex(t=>/[牡牝セ騙]\s*[0-9]+/.test(t.s));
+   let name=sex>=0?left.slice(sex+1).find(t=>t.y>left[sex].y+1&&t.y<left[sex].y+17)?.s:null;
+   // Text items can split sex/age across spans; fallback to row text lines.
+   if(!name){const candidates=left.filter(t=>t.x<120&&t.s.length>=3&&!/[()（）0-9]/.test(t.s));name=candidates[1]?.s||null}
+   const oddsText=left.map(t=>t.s).join(' '),match=oddsText.match(/([0-9]+(?:\.[0-9]+)?)\s*\(([0-9]+)人気\)/);
+   if(name)out.push({number:out.length+1,name,sex_age:sex>=0?left[sex].s:null,odds:match?Number(match[1]):null,odds_rank:match?Number(match[2]):null});
+  }
+  if(out.length<2)throw Error('馬名を十分に抽出できませんでした。別レイアウトまたは画像PDFの可能性があります。');
+  extracted={source_file:f.name,status:'研究用・未照合',horses:out};
+  status.textContent=`${out.length}頭を仮抽出。馬番・馬名・オッズを原紙と照合してな。`; 
+  preview.innerHTML='<div style="max-height:300px;overflow:auto">'+out.map(h=>`<div class="horse">${h.number}番 ${escapeHtml(h.name)}　${h.odds??'不明'}倍 <span class="small">${escapeHtml(h.sex_age||'')}</span></div>`).join('')+'</div>';
+  document.getElementById('pdfImport').style.display='inline-block';document.getElementById('pdfExport').style.display='inline-block';
+ }catch(e){status.textContent='読込失敗: '+e.message}
+}
+document.getElementById('pdfLoad').onclick=parsePDF;
+document.getElementById('pdfImport').onclick=()=>{if(!extracted)return;if(!confirm('現在の馬データをPDFから抽出した馬名に置き換えるで。採点は未入力の代わりに初期値3点になるため、予想には使わず再採点してな。'))return;
+ horses=[];extracted.horses.forEach(h=>addHorse(h.name,undefined,undefined,true));render();save();document.getElementById('results').innerHTML='';status.textContent='馬名を反映したで。採点は初期値なので予想前に全頭確認が必要。';};
+document.getElementById('pdfExport').onclick=()=>{if(!extracted)return;const blob=new Blob([JSON.stringify(extracted,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='ppe_pdf_extracted.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)};
+</script>
+</main><script>
+const keys=['ability','change','position','condition','course'];
+const labels=['基礎能力','前走からの変化','位置取り','状態・ローテ','コース・馬場'];
+const weights={lower:[25,15,10,15,15,20],graded:[30,10,15,15,15,15]};
+const el=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid=()=>typeof crypto!=='undefined'&&crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random();
+let horses=[];
+const fields=['race','mode','temp','scenario','probS','probM','probH'];
+function save(){try{localStorage.setItem('ppe-v02',JSON.stringify({horses,settings:Object.fromEntries(fields.map(k=>[k,el(k).value]))}));el('saved').textContent='このiPhoneのブラウザに保存しました';el('saved').className='hint ok'}catch(e){el('saved').textContent='保存できませんでした。ブラウザの設定を確認してな。'}}
+function addHorse(name='',scores=[3,3,3,3,3],pace=[3,3,3],skip=false){horses.push({id:uid(),name,scores:[...scores],pace:[...pace]});if(!skip){render();save()}}
+function render(){el('horses').innerHTML=horses.map((h,i)=>`<div class="horse" data-id="${h.id}"><label>馬 ${i+1} の名前</label><input class="name" value="${esc(h.name)}" placeholder="馬名"><div class="six">${labels.map((l,j)=>`<div><label>${l}</label><input class="score" data-j="${j}" type="number" min="0" max="5" step="0.5" value="${h.scores[j]}"></div>`).join('')}</div><label>展開適性（0〜5点）</label><div class="scenario-grid">${['S','M','H'].map((x,j)=>`<div><label>${{S:'スロー',M:'ミドル',H:'ハイ'}[x]}</label><input class="pace" data-j="${j}" type="number" min="0" max="5" step="0.5" value="${h.pace[j]}"></div>`).join('')}</div><button class="secondary remove">この馬を削除</button></div>`).join('');document.querySelectorAll('.horse').forEach(node=>{const h=horses.find(x=>x.id===node.dataset.id);node.querySelector('.name').oninput=e=>{h.name=e.target.value;save()};node.querySelectorAll('.score').forEach(inp=>inp.oninput=e=>{h.scores[+inp.dataset.j]=e.target.value===''?null:Number(e.target.value);save()});node.querySelectorAll('.pace').forEach(inp=>inp.oninput=e=>{h.pace[+inp.dataset.j]=e.target.value===''?null:Number(e.target.value);save()});node.querySelector('.remove').onclick=()=>{horses=horses.filter(x=>x.id!==h.id);render();save()}})}
+function importNames(replace){let names=el('bulk').value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);if(!names.length){alert('馬名を1行1頭で入力してな');return}if(replace&&!confirm('今の全頭データを消して入れ替えるで。よろしい？'))return;if(replace)horses=[];const seen=new Set(horses.map(h=>h.name));for(const name of names){if(!seen.has(name)){addHorse(name,undefined,undefined,true);seen.add(name)}}el('bulk').value='';el('results').innerHTML='';render();save()}
+el('import').onclick=()=>importNames(false);el('replace').onclick=()=>importNames(true);
+el('add').onclick=()=>addHorse();el('save').onclick=save;
+el('sample').onclick=()=>{if(horses.length&&!confirm('現在の採点をサンプルに置き換えるで。よろしい？'))return;horses=[];[['A馬',[4.5,4,3.5,4,4.5],[3.5,4,4.5]],['B馬',[4,3,4.5,4,4],[4,3.5,2.5]],['C馬',[3.5,4.5,3,4,3.5],[3.5,4.5,4]],['D馬',[3,3.5,4,3,4],[4,3,2]],['E馬',[3,3,3,3.5,3],[2.5,3.5,4]]].forEach(([n,s,p])=>addHorse(n,s,p,true));render();save();el('results').innerHTML=''};
+el('clear').onclick=()=>{if(!confirm('全頭のデータを消去するで。よろしい？'))return;horses=[];render();save();el('results').innerHTML=''};
+fields.forEach(k=>el(k).addEventListener('change',save));
+function calc(){el('status').textContent='';el('results').innerHTML='';const T=Number(el('temp').value);if(!horses.length||!Number.isFinite(T)||T<=0){el('status').textContent='馬を追加し、Tを0より大きくしてな。';return}const valid=x=>typeof x==='number'&&Number.isFinite(x)&&x>=0&&x<=5;if(horses.some(h=>!h.name.trim()||h.scores.some(x=>!valid(x))||h.pace.some(x=>!valid(x)))){el('status').textContent='全頭の馬名と0〜5点の採点を確認してな。';return}const ps=['probS','probM','probH'].map(k=>Number(el(k).value));if(ps.some(x=>!Number.isFinite(x)||x<0||x>100)||Math.abs(ps.reduce((a,b)=>a+b,0)-100)>0.0001){el('status').textContent='展開の発生確率を合計100%にしてな。';return}const w=weights[el('mode').value];const indexes=horses.map(h=>h.pace.map(p=>(h.scores.reduce((sum,s,j)=>sum+s*w[j]/5,0)+p*w[5]/5)));
+const scenarios=[0,1,2].map(j=>{const vals=indexes.map(x=>x[j]);const max=Math.max(...vals);const ex=vals.map(v=>Math.exp((v-max)/T));const sum=ex.reduce((a,b)=>a+b,0);return ex.map(x=>x/sum)});
+const mode=el('scenario').value;const probs=mode==='all'?ps.map(x=>x/100):['S','M','H'].map(x=>x===mode?1:0);
+const rows=horses.map((h,i)=>({name:h.name,p:100*scenarios.reduce((sum,s,j)=>sum+probs[j]*s[i],0),index:indexes[i].reduce((sum,v,j)=>sum+probs[j]*v,0),each:scenarios.map(s=>100*s[i])})).sort((a,b)=>b.p-a.p);
+el('results').innerHTML=`<h3>${esc(el('race').value)}：${rows.length}頭</h3><p class="notice">${mode==='all'?'3展開統合':'単一展開'}・温度T=${T}／未校正の試算</p>`+rows.map((r,i)=>`<div class="horse"><div class="rank">${['◎','○','▲'][i]||i+1+'位'} ${esc(r.name)} <span style="float:right">${r.p.toFixed(1)}%</span></div><div class="small">平均指数 ${r.index.toFixed(1)}/100｜S ${r.each[0].toFixed(1)}%・M ${r.each[1].toFixed(1)}%・H ${r.each[2].toFixed(1)}%</div><div class="bar"><div style="width:${r.p}%"></div></div></div>`).join('');save()}
+el('calc').onclick=calc;
+try{const raw=localStorage.getItem('ppe-v02');if(raw){const obj=JSON.parse(raw);fields.forEach(k=>{if(obj.settings&&obj.settings[k]!=null)el(k).value=obj.settings[k]});horses=(obj.horses||[]).filter(h=>Array.isArray(h.scores)&&h.scores.length===5&&Array.isArray(h.pace)&&h.pace.length===3).map(h=>({...h,id:uid()}));render();el('saved').textContent='保存済みデータを復元しました'}else{el('sample').click()}}catch(e){el('sample').click()}
+</script></body></html>
